@@ -49,8 +49,8 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
-origins = ["*"] if settings.app_env == "development" else ["http://localhost:3000"]
-allow_credentials = False if origins == ["*"] else True
+origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+allow_credentials = False if "*" in origins else True
 
 app.add_middleware(
     CORSMiddleware,

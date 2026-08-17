@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # App
     app_env: str = Field(default="development")
     log_level: str = Field(default="info")
+    allowed_origins: str = Field(default="*")
 
     # LLM Provider
     llm_provider: str = Field(default="gemini", description="Options: gemini, groq")
