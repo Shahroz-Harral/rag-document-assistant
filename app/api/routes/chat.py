@@ -4,11 +4,13 @@ RAG Document Assistant — Chat Routes
 Handles question answering over indexed documents.
 """
 
+import anyio
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import ChatRequest, ChatResponse
-from app.core.llm import get_llm
+from app.services.rag import ask_question, ask_question_stream
+from app.core.guardrails import validate_response
 
 router = APIRouter()
 
@@ -25,22 +27,18 @@ async def chat(request: ChatRequest):
     4. Validate output through Guardrails AI
     5. Return answer with source citations
     """
-    llm = get_llm()
+    rag_result = await anyio.to_thread.run_sync(
+        ask_question, request.question, request.top_k
+    )
+    answer = rag_result["answer"]
 
-    # TODO: Implement full RAG pipeline
-    # 1. Embed query → search Pinecone → get relevant chunks
-    # 2. Build prompt with context
-    # 3. Generate response via LLM
-    # 4. Validate through guardrails
-    # 5. Return with sources
-
-    # Placeholder: Direct LLM call (no RAG yet)
-    response = llm.invoke(request.question)
+    if request.use_guardrails:
+        answer = validate_response(answer)
 
     return ChatResponse(
-        answer=response.content,
-        sources=[],
-        model=llm.model if hasattr(llm, "model") else "unknown",
+        answer=answer,
+        sources=rag_result["sources"],
+        model="Groq/Gemini-Fallback",
     )
 
 
@@ -49,13 +47,11 @@ async def chat_stream(request: ChatRequest):
     """
     Ask a question with streaming response (Server-Sent Events).
     """
-    llm = get_llm()
-
     async def generate():
-        # TODO: Replace with RAG pipeline + streaming
-        async for chunk in llm.astream(request.question):
-            if chunk.content:
-                yield f"data: {chunk.content}\n\n"
+        async for chunk in ask_question_stream(request.question, top_k=request.top_k):
+            safe_chunk = chunk.replace("\n", "\\n")
+            yield f"data: {safe_chunk}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+

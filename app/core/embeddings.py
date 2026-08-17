@@ -15,6 +15,6 @@ def get_embeddings() -> GoogleGenerativeAIEmbeddings:
     Uses Google's text-embedding model (included in Gemini free tier).
     """
     return GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
+        model="gemini-embedding-001",
         google_api_key=settings.google_api_key,
     )

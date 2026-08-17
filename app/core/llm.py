@@ -9,41 +9,28 @@ from langchain_core.language_models import BaseChatModel
 from app.config import settings
 
 
-def get_llm() -> BaseChatModel:
+def get_llm():
     """
-    Factory function that returns the configured LLM provider.
+    Factory function that returns the Groq LLM with a Google Gemini fallback.
 
-    Supports:
-        - gemini: Google Gemini via free AI Studio tier
-        - groq: Groq for ultra-fast inference (free tier)
-
-    Usage:
-        llm = get_llm()
-        response = llm.invoke("Hello!")
+    If Groq fails (e.g., rate limits or downtime), LangChain automatically 
+    routes the request to Gemini without crashing the application.
     """
-    provider = settings.llm_provider.lower()
+    from langchain_groq import ChatGroq
+    from langchain_google_genai import ChatGoogleGenerativeAI
 
-    if provider == "gemini":
-        from langchain_google_genai import ChatGoogleGenerativeAI
+    groq_llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        api_key=settings.groq_api_key,
+        temperature=0.3,
+    )
 
-        return ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            google_api_key=settings.google_api_key,
-            temperature=0.3,
-            convert_system_message_to_human=True,
-        )
+    gemini_llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        google_api_key=settings.google_api_key,
+        temperature=0.3,
+        convert_system_message_to_human=True,
+    )
 
-    elif provider == "groq":
-        from langchain_groq import ChatGroq
-
-        return ChatGroq(
-            model="llama-3.3-70b-versatile",
-            api_key=settings.groq_api_key,
-            temperature=0.3,
-        )
-
-    else:
-        raise ValueError(
-            f"Unsupported LLM provider: '{provider}'. "
-            f"Set LLM_PROVIDER to 'gemini' or 'groq' in your .env file."
-        )
+    # LangChain fallback magic
+    return groq_llm.with_fallbacks([gemini_llm])

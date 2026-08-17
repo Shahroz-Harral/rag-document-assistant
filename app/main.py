@@ -5,24 +5,57 @@ Entry point for the application. Run with:
     uvicorn app.main:app --reload
 """
 
+import socket
+import logging
+
+# Patch socket.getaddrinfo to prefer IPv4.
+# On macOS, Python's default socket resolution tries IPv6 first and hangs for 150s
+# if the local network route for IPv6 drops packets, before falling back to IPv4.
+_old_getaddrinfo = socket.getaddrinfo
+def _allowed_gai_families(*args, **kwargs):
+    responses = _old_getaddrinfo(*args, **kwargs)
+    return [r for r in responses if r[0] == socket.AF_INET]
+socket.getaddrinfo = _allowed_gai_families
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.routes import chat, documents, health
+from app.services.vectorstore import init_vectorstore
+
+logging.basicConfig(level=settings.log_level.upper())
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initializes global resources on startup."""
+    logger.info("Initializing vector store connection...")
+    try:
+        init_vectorstore()
+    except Exception as e:
+        logger.warning(f"Vector store initialization deferred: {e}")
+    yield
+    logger.info("Application shutdown complete.")
 
 
 app = FastAPI(
     title="RAG Document Assistant",
     description="Upload documents and ask questions — with guardrails for hallucination prevention.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
-# CORS middleware (allow all origins in dev, restrict in production)
+# CORS middleware configuration
+origins = ["*"] if settings.app_env == "development" else ["http://localhost:3000"]
+allow_credentials = False if origins == ["*"] else True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.app_env == "development" else [],
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -40,3 +73,4 @@ async def root():
         "docs": "/docs",
         "health": "/api/health",
     }
+

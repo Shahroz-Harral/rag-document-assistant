@@ -14,6 +14,7 @@ class ChatRequest(BaseModel):
     """Request body for the /api/chat endpoint."""
     question: str = Field(..., min_length=1, max_length=2000, description="The question to ask about your documents")
     top_k: int = Field(default=5, ge=1, le=20, description="Number of document chunks to retrieve")
+    use_guardrails: bool = Field(default=True, description="Whether to apply Guardrails AI validation to the response")
 
 
 class SourceChunk(BaseModel):

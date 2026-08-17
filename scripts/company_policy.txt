@@ -1,0 +1,20 @@
+# Acme Corp — Internal Employee Handbook & Policy Guide
+
+## 1. Working Hours & Remote Work
+- Standard working hours are 9:00 AM to 5:00 PM EST, Monday through Friday.
+- All full-time employees are eligible for a hybrid work schedule (up to 3 days remote per week).
+- Remote Work Allowance: Employees receive a one-time stipend of $500 to setup their home office, plus a $50/month internet reimbursement.
+
+## 2. Refund & Return Policy
+- Customer refunds are valid within 30 days of original purchase.
+- All returns require a valid proof of purchase or order ID.
+- Digital downloads and custom software development services are non-refundable after 14 days of delivery.
+
+## 3. IT Support & Contact Information
+- For password resets, software licenses, or hardware issues, contact IT Helpdesk at support@acmecorp-example.com or call +1-800-555-0199.
+- Critical system outages should be reported directly to emergency-it@acmecorp-example.com.
+
+## 4. Vacation & Paid Time Off (PTO)
+- Full-time employees accrue 15 days of PTO per calendar year.
+- Unused PTO up to 5 days can be carried over into the next year.
+- Employees must submit PTO requests at least 2 weeks in advance via the HR portal.

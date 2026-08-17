@@ -4,8 +4,11 @@ RAG Document Assistant — Document Upload & Listing Routes
 Handles document upload, chunking, embedding, and listing.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+import anyio
+from fastapi import APIRouter, UploadFile, File
 from app.models.schemas import DocumentUploadResponse, DocumentInfo
+from app.services.document import process_document_sync
+from app.services.vectorstore import add_documents_to_store
 
 router = APIRouter()
 
@@ -16,33 +19,34 @@ async def upload_document(file: UploadFile = File(...)):
     Upload a document (PDF or TXT) to be indexed for RAG.
 
     The document will be:
-    1. Parsed and extracted
-    2. Split into chunks
-    3. Embedded and stored in Pinecone
+    1. Read safely from payload
+    2. Parsed & chunked in threadpool
+    3. Embedded and stored in Pinecone in threadpool
     """
-    # Validate file type
-    allowed_types = ["application/pdf", "text/plain"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type '{file.content_type}' not supported. Use PDF or TXT.",
-        )
+    filename = file.filename or "uploaded_document"
+    content_type = file.content_type or ""
 
-    # TODO: Implement document processing pipeline
-    # 1. Read file content
-    # 2. Split into chunks using LangChain text splitters
-    # 3. Generate embeddings
-    # 4. Upsert into Pinecone
+    file_bytes = await file.read()
+
+    # Offload blocking parsing & text splitting to worker thread pool
+    chunks = await anyio.to_thread.run_sync(
+        process_document_sync, file_bytes, filename, content_type
+    )
+
+    # Offload blocking Pinecone vector store API calls to worker thread pool
+    added_count = await anyio.to_thread.run_sync(
+        add_documents_to_store, chunks
+    )
 
     return DocumentUploadResponse(
-        filename=file.filename or "unknown",
-        chunks_created=0,
-        message="Document upload endpoint ready — processing pipeline coming soon.",
+        filename=filename,
+        chunks_created=added_count,
+        message="Document uploaded and indexed successfully.",
     )
 
 
 @router.get("/", response_model=list[DocumentInfo])
 async def list_documents():
     """List all indexed documents."""
-    # TODO: Query Pinecone for unique document sources
     return []
+
