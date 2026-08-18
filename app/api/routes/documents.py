@@ -55,10 +55,12 @@ async def upload_document(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except (FileNotFoundError, OSError) as e:
-        logger.error(f"Filesystem error during document upload: {e}", exc_info=True)
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Filesystem error during document upload: {e}\n{tb}")
         raise HTTPException(
             status_code=500,
-            detail=f"Upload failed (serverless filesystem error): {str(e)}"
+            detail=f"Upload failed (serverless filesystem error): {str(e)}\n\nTraceback:\n{tb}"
         )
     except Exception as e:
         logger.error(f"Error during document upload: {e}", exc_info=True)
