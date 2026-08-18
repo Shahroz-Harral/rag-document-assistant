@@ -5,8 +5,16 @@ Loads settings from environment variables with sensible defaults.
 """
 
 import os
+import pathlib
 from pydantic_settings import BaseSettings
 from pydantic import Field
+
+# Ensure HOME points to a valid directory for serverless environments (Vercel/Lambda)
+# where the default HOME may not exist. Libraries like google-auth and langsmith
+# use Path.home() / expanduser("~") and raise FileNotFoundError if it fails.
+_home = os.environ.get("HOME", "")
+if not _home or not os.path.isdir(_home):
+    os.environ["HOME"] = "/tmp"
 
 
 class Settings(BaseSettings):

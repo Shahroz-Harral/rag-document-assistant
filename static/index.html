@@ -31,12 +31,6 @@
         <span id="health-text">Connecting...</span>
       </div>
 
-      <div class="toggle-container">
-        <span>Guardrails AI</span>
-        <label class="switch">
-          <input type="checkbox" id="guardrails-toggle" checked>
-          <span class="slider"></span>
-        </label>
       </div>
     </div>
   </header>
@@ -118,7 +112,6 @@
     const docCount = document.getElementById('doc-count');
     const healthText = document.getElementById('health-text');
     const healthDot = document.getElementById('health-dot');
-    const guardrailsToggle = document.getElementById('guardrails-toggle');
     
     const sourceModal = document.getElementById('source-modal');
     const modalSourceTitle = document.getElementById('modal-source-title');
@@ -295,7 +288,6 @@
           body: JSON.stringify({
             question: question,
             top_k: 5,
-            use_guardrails: guardrailsToggle.checked,
             session_id: sessionId
           })
         });

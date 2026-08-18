@@ -11,7 +11,6 @@ from fastapi.responses import StreamingResponse
 
 from app.models.schemas import ChatRequest, ChatResponse
 from app.services.rag import ask_question, ask_question_stream
-from app.core.guardrails import validate_response
 
 router = APIRouter()
 
@@ -25,16 +24,12 @@ async def chat(request: ChatRequest):
     1. Embed the question
     2. Retrieve relevant chunks from Pinecone
     3. Generate answer using LLM with context & chat history
-    4. Validate output through Guardrails AI
-    5. Return answer with source citations & session_id
+    4. Return answer with source citations & session_id
     """
     rag_result = await anyio.to_thread.run_sync(
         ask_question, request.question, request.top_k, request.session_id
     )
     answer = rag_result["answer"]
-
-    if request.use_guardrails:
-        answer = validate_response(answer)
 
     return ChatResponse(
         answer=answer,

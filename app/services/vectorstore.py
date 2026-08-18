@@ -36,13 +36,23 @@ def init_vectorstore() -> PineconeVectorStore:
             "Please ensure the index is created with dimension 3072 and metric 'cosine'."
         )
 
-    embeddings = get_embeddings()
-    _vectorstore_instance = PineconeVectorStore(
-        index_name=index_name,
-        embedding=embeddings,
-        pinecone_api_key=settings.pinecone_api_key,
-    )
-    logger.info(f"Initialized Pinecone VectorStore for index: {index_name}")
+    try:
+        embeddings = get_embeddings()
+    except Exception as e:
+        logger.error(f"Failed to initialize embeddings: {e}")
+        return None
+
+    try:
+        _vectorstore_instance = PineconeVectorStore(
+            index_name=index_name,
+            embedding=embeddings,
+            pinecone_api_key=settings.pinecone_api_key,
+        )
+        logger.info(f"Initialized Pinecone VectorStore for index: {index_name}")
+    except Exception as e:
+        logger.error(f"Failed to initialize PineconeVectorStore: {e}")
+        return None
+
     return _vectorstore_instance
 
 

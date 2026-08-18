@@ -72,7 +72,7 @@ async def test_upload_markdown_file(client):
 @pytest.mark.asyncio
 async def test_chat_session(client):
     async with client as ac:
-        payload = {"question": "What is the policy?", "top_k": 3, "use_guardrails": False}
+        payload = {"question": "What is the policy?", "top_k": 3}
         resp = await ac.post("/api/chat/", json=payload)
         assert resp.status_code == 200
         data = resp.json()
