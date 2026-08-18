@@ -1,6 +1,6 @@
 # 📄 RAG Document Assistant
 
-A production-ready Retrieval-Augmented Generation (RAG) API that lets you upload documents and ask questions about them — with built-in guardrails for hallucination prevention and output validation.
+A production-ready Retrieval-Augmented Generation (RAG) API and Web UI that lets you upload documents and ask questions about them — optimized for serverless environments (like Vercel) with 100% in-memory processing.
 
 ## 🛠️ Tech Stack
 
@@ -10,17 +10,16 @@ A production-ready Retrieval-Augmented Generation (RAG) API that lets you upload
 | **LLM** | Google Gemini (free tier) / Groq (fallback) |
 | **RAG** | LangChain (document loaders, text splitters, retrievers) |
 | **Vector Store** | Pinecone |
-| **Guardrails** | Guardrails AI (output validation) |
+| **Frontend** | HTML/Vanilla JS (Interactive chat interface) |
 | **Testing** | DeepEval (hallucination detection) + pytest |
-| **Deployment** | Docker |
+| **Deployment** | Vercel (Serverless) / Docker |
 
 ## ✨ Features
 
-- **Document Upload** — Upload PDFs and text files, automatically chunked and embedded
-- **Conversational Q&A** — Ask questions about your documents via REST API
+- **Serverless Optimized** — 100% in-memory document parsing (PDF, TXT, MD) with safe multiprocessing configs for platforms like Vercel
+- **Conversational Q&A** — Ask questions about your documents via REST API or the built-in web interface
 - **Source Citations** — Every answer includes the source chunks used
-- **Streaming Responses** — Real-time token streaming via SSE
-- **Output Guardrails** — Validates responses for PII leaks, off-topic content, and factuality
+- **Streaming Responses** — Real-time token streaming via SSE for instant feedback
 - **Hallucination Testing** — DeepEval test suite checking faithfulness and relevancy
 - **Model-Agnostic** — Swap LLM providers with one line (Gemini, Groq, OpenAI, etc.)
 
@@ -37,7 +36,7 @@ A production-ready Retrieval-Augmented Generation (RAG) API that lets you upload
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/rag-document-assistant.git
+git clone https://github.com/Shahroz-Harral/rag-document-assistant.git
 cd rag-document-assistant
 
 # Create virtual environment
@@ -54,6 +53,15 @@ cp .env.example .env
 # Run the server
 uvicorn app.main:app --reload
 ```
+
+### Vercel Deployment
+
+The project includes a `vercel.json` and is heavily optimized for Vercel's Serverless Functions:
+- Avoids `/tmp` disk writes by doing 100% in-memory document parsing (`PyPDF`, `BytesIO`).
+- Disables Pinecone thread pools to prevent `_multiprocessing.SemLock` FileNotFoundError crashes.
+- Bypasses filesystem dependencies when generating embeddings.
+
+Just connect your GitHub repository to Vercel and add your environment variables (`GOOGLE_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`).
 
 ### Docker
 
@@ -98,7 +106,7 @@ rag-document-assistant/
 │   ├── core/
 │   │   ├── llm.py            # LLM provider setup (model-agnostic)
 │   │   ├── embeddings.py     # Embedding model setup
-│   │   └── guardrails.py     # Output validation rules
+│   │   └── guardrails.py     # Output validation (pass-through fallback)
 │   ├── services/
 │   │   ├── rag.py            # RAG pipeline (chunking, retrieval, generation)
 │   │   ├── document.py       # Document processing service
