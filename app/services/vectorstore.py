@@ -26,7 +26,7 @@ def init_vectorstore() -> PineconeVectorStore:
         logger.warning("PINECONE_API_KEY is not set.")
         return None
 
-    pc = Pinecone(api_key=settings.pinecone_api_key)
+    pc = Pinecone(api_key=settings.pinecone_api_key, pool_threads=1)
     index_name = settings.pinecone_index_name
 
     existing_indexes = [idx.name for idx in pc.list_indexes()]
@@ -43,10 +43,10 @@ def init_vectorstore() -> PineconeVectorStore:
         return None
 
     try:
+        _index = pc.Index(index_name)
         _vectorstore_instance = PineconeVectorStore(
-            index_name=index_name,
+            index=_index,
             embedding=embeddings,
-            pinecone_api_key=settings.pinecone_api_key,
         )
         logger.info(f"Initialized Pinecone VectorStore for index: {index_name}")
     except Exception as e:
@@ -78,7 +78,7 @@ def add_documents_to_store(chunks: list[Document], batch_size: int = 100) -> int
     if vectorstore is not None:
         for i in range(0, total_chunks, batch_size):
             batch = chunks[i : i + batch_size]
-            vectorstore.add_documents(batch)
+            vectorstore.add_documents(batch, async_req=False)
 
     # Register document metadata
     first_chunk = chunks[0]
@@ -108,7 +108,7 @@ def delete_document_from_store(filename: str) -> bool:
     if vectorstore is not None:
         try:
             # Delete vectors matching metadata source filter
-            vectorstore.delete(filter={"source": filename})
+            vectorstore.delete(filter={"source": filename}, async_req=False)
         except Exception as e:
             logger.warning(f"Error deleting vectors for '{filename}' from Pinecone: {e}")
 
