@@ -1,9 +1,10 @@
 """
 RAG Document Assistant — Chat Routes
 
-Handles question answering over indexed documents.
+Handles question answering over indexed documents with multi-turn memory and streaming support.
 """
 
+import json
 import anyio
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -23,12 +24,12 @@ async def chat(request: ChatRequest):
     The pipeline:
     1. Embed the question
     2. Retrieve relevant chunks from Pinecone
-    3. Generate answer using LLM with retrieved context
+    3. Generate answer using LLM with context & chat history
     4. Validate output through Guardrails AI
-    5. Return answer with source citations
+    5. Return answer with source citations & session_id
     """
     rag_result = await anyio.to_thread.run_sync(
-        ask_question, request.question, request.top_k
+        ask_question, request.question, request.top_k, request.session_id
     )
     answer = rag_result["answer"]
 
@@ -39,6 +40,7 @@ async def chat(request: ChatRequest):
         answer=answer,
         sources=rag_result["sources"],
         model="Groq/Gemini-Fallback",
+        session_id=rag_result["session_id"],
     )
 
 
@@ -46,12 +48,19 @@ async def chat(request: ChatRequest):
 async def chat_stream(request: ChatRequest):
     """
     Ask a question with streaming response (Server-Sent Events).
+    Yields:
+    - metadata event containing sources & session_id
+    - token events containing answer chunks
+    - done event
     """
     async def generate():
-        async for chunk in ask_question_stream(request.question, top_k=request.top_k):
-            safe_chunk = chunk.replace("\n", "\\n")
-            yield f"data: {safe_chunk}\n\n"
+        async for event in ask_question_stream(
+            question=request.question,
+            top_k=request.top_k,
+            session_id=request.session_id
+        ):
+            payload = json.dumps(event)
+            yield f"data: {payload}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
-

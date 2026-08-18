@@ -1,14 +1,18 @@
 """
-RAG Document Assistant — Document Upload & Listing Routes
+RAG Document Assistant — Document Upload, Listing, and Deletion Routes
 
-Handles document upload, chunking, embedding, and listing.
+Handles document upload, chunking, embedding, listing, and deletion.
 """
 
 import anyio
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.models.schemas import DocumentUploadResponse, DocumentInfo
 from app.services.document import process_document_sync
-from app.services.vectorstore import add_documents_to_store
+from app.services.vectorstore import (
+    add_documents_to_store,
+    get_indexed_documents,
+    delete_document_from_store,
+)
 
 router = APIRouter()
 
@@ -47,6 +51,25 @@ async def upload_document(file: UploadFile = File(...)):
 
 @router.get("/", response_model=list[DocumentInfo])
 async def list_documents():
-    """List all indexed documents."""
-    return []
+    """List all currently indexed documents."""
+    docs = get_indexed_documents()
+    return [
+        DocumentInfo(
+            filename=d["filename"],
+            chunks=d["chunks"],
+            uploaded_at=d["uploaded_at"]
+        )
+        for d in docs
+    ]
 
+
+@router.delete("/{filename}")
+async def delete_document(filename: str):
+    """
+    Delete a document and its vector embeddings from Pinecone.
+    """
+    success = await anyio.to_thread.run_sync(delete_document_from_store, filename)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Document '{filename}' not found.")
+
+    return {"message": f"Document '{filename}' deleted successfully.", "filename": filename}

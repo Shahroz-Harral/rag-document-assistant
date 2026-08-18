@@ -1,5 +1,6 @@
 import logging
-from typing import Optional
+import datetime
+from typing import Optional, Dict, Any, List
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
@@ -10,6 +11,7 @@ from app.core.embeddings import get_embeddings
 logger = logging.getLogger(__name__)
 
 _vectorstore_instance: Optional[PineconeVectorStore] = None
+_indexed_documents_registry: Dict[str, Dict[str, Any]] = {}
 
 
 def init_vectorstore() -> PineconeVectorStore:
@@ -55,7 +57,7 @@ def get_vectorstore() -> PineconeVectorStore:
 
 def add_documents_to_store(chunks: list[Document], batch_size: int = 100) -> int:
     """
-    Adds document chunks to the Pinecone vector store in batches.
+    Adds document chunks to the Pinecone vector store in batches and updates index registry.
     """
     if not chunks:
         return 0
@@ -63,9 +65,45 @@ def add_documents_to_store(chunks: list[Document], batch_size: int = 100) -> int
     vectorstore = get_vectorstore()
     total_chunks = len(chunks)
 
-    for i in range(0, total_chunks, batch_size):
-        batch = chunks[i : i + batch_size]
-        vectorstore.add_documents(batch)
+    if vectorstore is not None:
+        for i in range(0, total_chunks, batch_size):
+            batch = chunks[i : i + batch_size]
+            vectorstore.add_documents(batch)
+
+    # Register document metadata
+    first_chunk = chunks[0]
+    filename = first_chunk.metadata.get("source", "uploaded_document")
+    _indexed_documents_registry[filename] = {
+        "filename": filename,
+        "chunks": total_chunks,
+        "uploaded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
 
     return total_chunks
 
+
+def get_indexed_documents() -> List[Dict[str, Any]]:
+    """
+    Returns a list of all currently tracked/indexed documents.
+    """
+    return list(_indexed_documents_registry.values())
+
+
+def delete_document_from_store(filename: str) -> bool:
+    """
+    Deletes all vector embeddings associated with a given filename from Pinecone and removes registry entry.
+    """
+    vectorstore = get_vectorstore()
+
+    if vectorstore is not None:
+        try:
+            # Delete vectors matching metadata source filter
+            vectorstore.delete(filter={"source": filename})
+        except Exception as e:
+            logger.warning(f"Error deleting vectors for '{filename}' from Pinecone: {e}")
+
+    if filename in _indexed_documents_registry:
+        del _indexed_documents_registry[filename]
+        return True
+
+    return True

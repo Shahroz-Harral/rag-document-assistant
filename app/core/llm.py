@@ -1,36 +1,68 @@
 """
 RAG Document Assistant — LLM Provider Setup (Model-Agnostic)
 
-Switch between free LLM providers by changing the LLM_PROVIDER env var.
-LangChain's abstraction means your chains/agents don't need to change.
+Switch between free LLM providers based on LLM_PROVIDER env var.
 """
 
-from langchain_core.language_models import BaseChatModel
+import logging
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_llm():
     """
-    Factory function that returns the Groq LLM with a Google Gemini fallback.
-
-    If Groq fails (e.g., rate limits or downtime), LangChain automatically 
-    routes the request to Gemini without crashing the application.
+    Factory function returning the configured LLM provider (Gemini or Groq)
+    with automatic fallback between providers.
     """
-    from langchain_groq import ChatGroq
     from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_groq import ChatGroq
 
-    groq_llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=settings.groq_api_key,
-        temperature=0.3,
-    )
+    models_to_try = []
 
-    gemini_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        google_api_key=settings.google_api_key,
-        temperature=0.3,
-        convert_system_message_to_human=True,
-    )
+    if settings.google_api_key:
+        try:
+            models_to_try.append(
+                ChatGoogleGenerativeAI(
+                    model="gemini-2.5-flash",
+                    google_api_key=settings.google_api_key,
+                    temperature=0.3,
+                )
+            )
+        except Exception:
+            pass
 
-    # LangChain fallback magic
-    return groq_llm.with_fallbacks([gemini_llm])
+        try:
+            models_to_try.append(
+                ChatGoogleGenerativeAI(
+                    model="gemini-1.5-pro",
+                    google_api_key=settings.google_api_key,
+                    temperature=0.3,
+                )
+            )
+        except Exception:
+            pass
+
+    if settings.groq_api_key:
+        try:
+            models_to_try.append(
+                ChatGroq(
+                    model="llama-3.1-8b-instant",
+                    api_key=settings.groq_api_key,
+                    temperature=0.3,
+                )
+            )
+        except Exception:
+            pass
+
+    if not models_to_try:
+        return ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=settings.google_api_key,
+            temperature=0.3,
+        )
+
+    primary = models_to_try[0]
+    fallbacks = models_to_try[1:]
+
+    return primary.with_fallbacks(fallbacks) if fallbacks else primary

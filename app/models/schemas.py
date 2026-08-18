@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000, description="The question to ask about your documents")
     top_k: int = Field(default=5, ge=1, le=20, description="Number of document chunks to retrieve")
     use_guardrails: bool = Field(default=True, description="Whether to apply Guardrails AI validation to the response")
+    session_id: Optional[str] = Field(default=None, description="Optional session ID to maintain chat history")
 
 
 class SourceChunk(BaseModel):
@@ -30,6 +31,7 @@ class ChatResponse(BaseModel):
     answer: str = Field(..., description="The generated answer")
     sources: list[SourceChunk] = Field(default_factory=list, description="Source chunks used")
     model: str = Field(..., description="The LLM model used")
+    session_id: Optional[str] = Field(default=None, description="Session ID for multi-turn conversation")
 
 
 # --- Documents ---

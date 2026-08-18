@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Document Assistant — Modern AI Workspace</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Custom Glassmorphism Styles -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header class="top-header">
+    <div class="brand">
+      <div class="brand-icon"><i class="fa-solid fa-brain"></i></div>
+      <div class="brand-title">RAG Document Assistant</div>
+    </div>
+    
+    <div class="header-actions">
+      <div class="badge" id="health-badge">
+        <span class="badge-dot" id="health-dot"></span>
+        <span id="health-text">Connecting...</span>
+      </div>
+
+      <div class="toggle-container">
+        <span>Guardrails AI</span>
+        <label class="switch">
+          <input type="checkbox" id="guardrails-toggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div>
+        <div class="section-header">Upload Knowledge Base</div>
+        <div class="upload-dropzone" id="dropzone">
+          <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+          <div class="upload-text">Click or drag PDF / TXT here</div>
+          <div class="upload-hint">Max file size: 25 MB</div>
+          <input type="file" id="file-input" accept=".pdf,.txt" style="display: none;">
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div class="section-header">Indexed Documents (<span id="doc-count">0</span>)</div>
+        <div class="doc-list" id="doc-list">
+          <div style="font-size: 0.85rem; color: var(--text-dim); text-align: center; padding: 20px 0;">
+            No documents indexed yet.
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Chat Workspace -->
+    <main class="chat-main">
+      <div class="chat-messages" id="chat-messages">
+        <!-- Welcome Message -->
+        <div class="message bot">
+          <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="message-content">
+            Hello! I am your <strong>RAG Document Assistant</strong>. Upload PDF or TXT documents using the sidebar, and ask me any questions. I'll provide grounded answers backed by source citations.
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="chat-input-bar">
+        <div class="input-wrapper">
+          <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask a question about your documents..."></textarea>
+          <button id="send-btn" class="send-btn" title="Send message">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Source Inspection Modal -->
+  <div class="modal-overlay" id="source-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-source-title">Source Citation</div>
+        <button class="close-btn" id="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-source-content">
+        Chunk content will appear here...
+      </div>
+    </div>
+  </div>
+
+  <!-- Frontend Logic Script -->
+  <script>
+    let sessionId = null;
+    let activeDocuments = [];
+
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const docList = document.getElementById('doc-list');
+    const docCount = document.getElementById('doc-count');
+    const healthText = document.getElementById('health-text');
+    const healthDot = document.getElementById('health-dot');
+    const guardrailsToggle = document.getElementById('guardrails-toggle');
+    
+    const sourceModal = document.getElementById('source-modal');
+    const modalSourceTitle = document.getElementById('modal-source-title');
+    const modalSourceContent = document.getElementById('modal-source-content');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+
+    // Auto-resize textarea
+    chatInput.addEventListener('input', () => {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    // Health check
+    async function checkHealth() {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const data = await res.json();
+          healthText.innerText = `Online (${data.llm_provider})`;
+          healthDot.style.background = 'var(--success)';
+          healthDot.style.boxShadow = '0 0 8px var(--success)';
+        } else {
+          throw new Error();
+        }
+      } catch (e) {
+        healthText.innerText = 'Offline';
+        healthDot.style.background = 'var(--danger)';
+        healthDot.style.boxShadow = '0 0 8px var(--danger)';
+      }
+    }
+
+    // Load Documents
+    async function loadDocuments() {
+      try {
+        const res = await fetch('/api/documents/');
+        if (res.ok) {
+          activeDocuments = await res.json();
+          renderDocList();
+        }
+      } catch (e) {
+        console.error('Failed to load documents', e);
+      }
+    }
+
+    function renderDocList() {
+      docCount.innerText = activeDocuments.length;
+      if (activeDocuments.length === 0) {
+        docList.innerHTML = `<div style="font-size: 0.85rem; color: var(--text-dim); text-align: center; padding: 20px 0;">No documents indexed yet.</div>`;
+        return;
+      }
+
+      docList.innerHTML = activeDocuments.map(doc => `
+        <div class="doc-item">
+          <div class="doc-info">
+            <i class="fa-regular fa-file-lines doc-icon"></i>
+            <div>
+              <div class="doc-name" title="${doc.filename}">${doc.filename}</div>
+              <div class="doc-chunks">${doc.chunks} chunks</div>
+            </div>
+          </div>
+          <button class="delete-btn" onclick="deleteDocument('${doc.filename}')" title="Delete document">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // Delete Document
+    async function deleteDocument(filename) {
+      if (!confirm(`Delete '${filename}' and its vector embeddings?`)) return;
+
+      try {
+        const res = await fetch(`/api/documents/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        if (res.ok) {
+          activeDocuments = activeDocuments.filter(d => d.filename !== filename);
+          renderDocList();
+        }
+      } catch (e) {
+        alert('Failed to delete document');
+      }
+    }
+
+    // Dropzone Upload
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) {
+        handleUpload(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) {
+        handleUpload(fileInput.files[0]);
+      }
+    });
+
+    async function handleUpload(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      dropzone.querySelector('.upload-text').innerText = 'Uploading & indexing...';
+
+      try {
+        const res = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          appendBotMessage(`Successfully indexed <strong>${data.filename}</strong> (${data.chunks_created} chunks created).`);
+          await loadDocuments();
+        } else {
+          const err = await res.json();
+          alert(`Upload failed: ${err.detail || 'Error uploading'}`);
+        }
+      } catch (e) {
+        alert('Network error during upload');
+      } finally {
+        dropzone.querySelector('.upload-text').innerText = 'Click or drag PDF / TXT here';
+        fileInput.value = '';
+      }
+    }
+
+    // Send Message
+    async function sendMessage() {
+      const question = chatInput.value.trim();
+      if (!question) return;
+
+      appendUserMessage(question);
+      chatInput.value = '';
+      chatInput.style.height = 'auto';
+
+      const botMessageEl = appendBotMessage('');
+      const messageContentEl = botMessageEl.querySelector('.message-content');
+      messageContentEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating response...';
+
+      let accumulatedAnswer = '';
+      let sources = [];
+
+      try {
+        const response = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: question,
+            top_k: 5,
+            use_guardrails: guardrailsToggle.checked,
+            session_id: sessionId
+          })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6).trim();
+              if (dataStr === '[DONE]') break;
+
+              try {
+                const event = JSON.parse(dataStr);
+                if (event.type === 'metadata') {
+                  sources = event.sources || [];
+                  if (event.session_id) sessionId = event.session_id;
+                } else if (event.type === 'token') {
+                  if (accumulatedAnswer === '') messageContentEl.innerHTML = '';
+                  accumulatedAnswer += event.content;
+                  messageContentEl.innerText = accumulatedAnswer;
+                }
+              } catch (e) {
+                // Raw text chunk fallback
+                if (accumulatedAnswer === '') messageContentEl.innerHTML = '';
+                accumulatedAnswer += dataStr;
+                messageContentEl.innerText = accumulatedAnswer;
+              }
+            }
+          }
+        }
+
+        // Render sources if available
+        if (sources && sources.length > 0) {
+          const sourcesContainer = document.createElement('div');
+          sourcesContainer.className = 'sources-container';
+          sourcesContainer.innerHTML = sources.map((src, idx) => `
+            <div class="source-tag" onclick="showSourceModal('${encodeURIComponent(src.source)}', '${encodeURIComponent(src.content)}', ${src.score})">
+              <i class="fa-solid fa-quote-left"></i> ${src.source} (${(src.score * 100).toFixed(0)}%)
+            </div>
+          `).join('');
+          messageContentEl.appendChild(sourcesContainer);
+        }
+
+      } catch (e) {
+        messageContentEl.innerHTML = '<span style="color: var(--danger);">Failed to get answer. Please check connection.</span>';
+      }
+    }
+
+    function appendUserMessage(text) {
+      const msg = document.createElement('div');
+      msg.className = 'message user';
+      msg.innerHTML = `
+        <div class="avatar"><i class="fa-solid fa-user"></i></div>
+        <div class="message-content">${escapeHtml(text)}</div>
+      `;
+      chatMessages.appendChild(msg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function appendBotMessage(text) {
+      const msg = document.createElement('div');
+      msg.className = 'message bot';
+      msg.innerHTML = `
+        <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+        <div class="message-content">${text}</div>
+      `;
+      chatMessages.appendChild(msg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return msg;
+    }
+
+    function showSourceModal(source, content, score) {
+      modalSourceTitle.innerText = `Citation: ${decodeURIComponent(source)} (${(score * 100).toFixed(0)}% relevance)`;
+      modalSourceContent.innerText = decodeURIComponent(content);
+      sourceModal.classList.add('active');
+    }
+
+    modalCloseBtn.addEventListener('click', () => sourceModal.classList.remove('active'));
+    sourceModal.addEventListener('click', (e) => {
+      if (e.target === sourceModal) sourceModal.classList.remove('active');
+    });
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+
+    // Init
+    checkHealth();
+    loadDocuments();
+  </script>
+</body>
+</html>
