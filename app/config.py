@@ -4,12 +4,13 @@ RAG Document Assistant — Configuration
 Loads settings from environment variables with sensible defaults.
 """
 
+import os
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from .env file."""
+    """Application settings loaded from environment variables or .env file."""
 
     # App
     app_env: str = Field(default="development")
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = Field(default=True)
 
     model_config = {
-        "env_file": ".env",
+        "env_file": ".env" if os.path.exists(".env") else None,
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
     }

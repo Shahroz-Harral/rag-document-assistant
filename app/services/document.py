@@ -1,7 +1,7 @@
 """
 RAG Document Assistant — In-Memory Document Parser & Chunker
 
-Parses PDF and TXT document bytes in-memory using pypdf and RecursiveCharacterTextSplitter.
+Parses PDF, TXT, MD, and text document bytes completely in-memory using pypdf and RecursiveCharacterTextSplitter.
 Completely avoids temporary disk files, eliminating serverless filesystem errors.
 """
 
@@ -14,11 +14,13 @@ from langchain_core.documents import Document
 
 MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB max size limit
 
+SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".csv", ".log", ".json"}
+
 
 def process_document_sync(file_bytes: bytes, filename: str, content_type: str) -> list[Document]:
     """
     Synchronously parses and chunks document bytes completely in-memory.
-    Designed for serverless and containerized environments.
+    Supports PDF, TXT, MD, CSV, LOG, and JSON files.
     """
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
@@ -30,7 +32,14 @@ def process_document_sync(file_bytes: bytes, filename: str, content_type: str) -
     safe_filename = pathlib.Path(filename).name
     documents = []
 
-    if content_type == "application/pdf" or file_ext == ".pdf":
+    is_pdf = content_type == "application/pdf" or file_ext == ".pdf"
+    is_text = (
+        content_type.startswith("text/")
+        or content_type in ["application/octet-stream", "text/plain", "text/markdown"]
+        or file_ext in SUPPORTED_TEXT_EXTENSIONS
+    )
+
+    if is_pdf:
         try:
             pdf_reader = PdfReader(io.BytesIO(file_bytes))
             for page_idx, page in enumerate(pdf_reader.pages):
@@ -45,7 +54,7 @@ def process_document_sync(file_bytes: bytes, filename: str, content_type: str) -
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to parse PDF document: {str(e)}")
 
-    elif content_type == "text/plain" or file_ext == ".txt":
+    elif is_text:
         try:
             text_content = file_bytes.decode("utf-8", errors="ignore")
             if text_content.strip():
@@ -61,7 +70,7 @@ def process_document_sync(file_bytes: bytes, filename: str, content_type: str) -
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{content_type}'. Supported formats: PDF, TXT."
+            detail=f"Unsupported file type '{content_type}' ({file_ext}). Supported formats: PDF, TXT, MD."
         )
 
     if not documents:

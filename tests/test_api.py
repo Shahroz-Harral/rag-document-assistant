@@ -56,6 +56,20 @@ async def test_document_lifecycle(client):
 
 
 @pytest.mark.asyncio
+async def test_upload_markdown_file(client):
+    async with client as ac:
+        with open("docs/ASD_Centre_RAG_Knowledge_Base_Test.md", "rb") as f:
+            content = f.read()
+
+        files = {"file": ("ASD_Centre_RAG_Knowledge_Base_Test.md", content, "text/markdown")}
+        resp = await ac.post("/api/documents/upload", files=files)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["filename"] == "ASD_Centre_RAG_Knowledge_Base_Test.md"
+        assert data["chunks_created"] > 0
+
+
+@pytest.mark.asyncio
 async def test_chat_session(client):
     async with client as ac:
         payload = {"question": "What is the policy?", "top_k": 3, "use_guardrails": False}
