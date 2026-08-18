@@ -4,6 +4,7 @@ RAG Document Assistant — Document Upload, Listing, and Deletion Routes
 Handles document upload, chunking, embedding, listing, and deletion.
 """
 
+import logging
 import anyio
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.models.schemas import DocumentUploadResponse, DocumentInfo
@@ -14,6 +15,7 @@ from app.services.vectorstore import (
     delete_document_from_store,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -30,23 +32,34 @@ async def upload_document(file: UploadFile = File(...)):
     filename = file.filename or "uploaded_document"
     content_type = file.content_type or ""
 
-    file_bytes = await file.read()
+    try:
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # Offload blocking parsing & text splitting to worker thread pool
-    chunks = await anyio.to_thread.run_sync(
-        process_document_sync, file_bytes, filename, content_type
-    )
+        # Offload blocking parsing & text splitting to worker thread pool
+        chunks = await anyio.to_thread.run_sync(
+            process_document_sync, file_bytes, filename, content_type
+        )
 
-    # Offload blocking Pinecone vector store API calls to worker thread pool
-    added_count = await anyio.to_thread.run_sync(
-        add_documents_to_store, chunks
-    )
+        # Offload blocking Pinecone vector store API calls to worker thread pool
+        added_count = await anyio.to_thread.run_sync(
+            add_documents_to_store, chunks
+        )
 
-    return DocumentUploadResponse(
-        filename=filename,
-        chunks_created=added_count,
-        message="Document uploaded and indexed successfully.",
-    )
+        return DocumentUploadResponse(
+            filename=filename,
+            chunks_created=added_count,
+            message="Document uploaded and indexed successfully.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error during document upload: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Upload & indexing failed: {str(e)}"
+        )
 
 
 @router.get("/", response_model=list[DocumentInfo])

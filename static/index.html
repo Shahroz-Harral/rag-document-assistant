@@ -251,11 +251,21 @@
           appendBotMessage(`Successfully indexed <strong>${data.filename}</strong> (${data.chunks_created} chunks created).`);
           await loadDocuments();
         } else {
-          const err = await res.json();
-          alert(`Upload failed: ${err.detail || 'Error uploading'}`);
+          let errorDetail = `Server Error (${res.status})`;
+          try {
+            const err = await res.json();
+            errorDetail = err.detail || errorDetail;
+          } catch (_) {
+            try {
+              const txt = await res.text();
+              if (txt) errorDetail = txt;
+            } catch (__) {}
+          }
+          alert(`Upload failed: ${errorDetail}`);
         }
       } catch (e) {
-        alert('Network error during upload');
+        console.error('Upload exception:', e);
+        alert(`Upload error: ${e.message || 'Network connection failed'}`);
       } finally {
         dropzone.querySelector('.upload-text').innerText = 'Click or drag PDF / TXT here';
         fileInput.value = '';
