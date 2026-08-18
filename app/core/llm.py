@@ -24,24 +24,13 @@ def get_llm():
         try:
             models_to_try.append(
                 ChatGoogleGenerativeAI(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.6-flash",
                     google_api_key=settings.google_api_key,
                     temperature=0.3,
                 )
             )
-        except Exception:
-            pass
-
-        try:
-            models_to_try.append(
-                ChatGoogleGenerativeAI(
-                    model="gemini-1.5-pro",
-                    google_api_key=settings.google_api_key,
-                    temperature=0.3,
-                )
-            )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to load gemini-3.6-flash: {e}")
 
     if settings.groq_api_key:
         try:
@@ -52,12 +41,12 @@ def get_llm():
                     temperature=0.3,
                 )
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to load llama-3.1-8b-instant: {e}")
 
     if not models_to_try:
         return ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             google_api_key=settings.google_api_key,
             temperature=0.3,
         )
